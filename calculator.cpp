@@ -36,29 +36,41 @@ void Expression::resolve()
 {
     {
         auto it = terms.begin();
-        decltype(it) left_operand_it, right_operand_it;
+        decltype(it) left_operand_it;
         while (it != terms.end()) {
             if (*it == "*") {
-                right_operand_it = ++it;
                 size_t index;
-                long double right_operand = stold(*right_operand_it, &index);
-                if (!isnumber((*right_operand_it)[index]) && !isspace((*right_operand_it)[index]))
-                    throw invalid_argument("Invalid operand: " + *right_operand_it);
+                char conversion_end;
+
                 long double left_operand = stold(*left_operand_it, &index);
-                if (!isnumber((*left_operand_it)[index]) && !isspace((*left_operand_it)[index]))
+                conversion_end = (*left_operand_it)[index];
+                if (!isdigit(conversion_end) && conversion_end != '\0')
                     throw invalid_argument("Invalid operand: " + *left_operand_it);
+
+                auto right_operand_it = ++it;
+                long double right_operand = stold(*right_operand_it, &index);
+                conversion_end = (*right_operand_it)[index];
+                if (!isdigit(conversion_end) && conversion_end != '\0')
+                    throw invalid_argument("Invalid operand: " + *right_operand_it);
+
                 *left_operand_it = to_string(left_operand * right_operand);
                 it = terms.erase(++left_operand_it, ++right_operand_it);
             }
             else if (*it == "/") {
-                right_operand_it = ++it;
                 size_t index;
-                long double right_operand = stold(*right_operand_it, &index);
-                if (!isspace((*right_operand_it)[index]))
-                    throw invalid_argument("Invalid operand: " + *right_operand_it);
+                char conversion_end;
+
                 long double left_operand = stold(*left_operand_it, &index);
-                if (!isspace((*left_operand_it)[index]))
+                conversion_end = (*left_operand_it)[index];
+                if (!isdigit(conversion_end) && conversion_end != '\0')
                     throw invalid_argument("Invalid operand: " + *left_operand_it);
+
+                auto right_operand_it = ++it;
+                long double right_operand = stold(*right_operand_it, &index);
+                conversion_end = (*right_operand_it)[index];
+                if (!isdigit(conversion_end) && conversion_end != '\0')
+                    throw invalid_argument("Invalid operand: " + *right_operand_it);
+
                 *left_operand_it = to_string(left_operand / right_operand);
                 it = terms.erase(++left_operand_it, ++right_operand_it);
             }
