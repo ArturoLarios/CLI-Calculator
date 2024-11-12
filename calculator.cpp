@@ -1,93 +1,96 @@
 #include <iostream>
 #include <string>
 #include <list>
+#include <cctype>
+#include <stdexcept>
 
-using std::istream, std::cin, std::cout, std::endl, std::string, std::to_string, std::list;
-
-/* 
-    using a deque to hold the operands and operators as strings
-        push_back and pop_front
-    using string operations to parse
-        substr(pos, len)
-        erase(pos, len)
-        find_first_of()
-        to_string()
-        stold()
-*/
+using std::istream, std::cin, std::cout, std::endl, std::string, std::to_string, std::list, std::invalid_argument;
 
 class Expression {
     private:
         string expression;
-        string operators{"*/+-"};
         list<string> terms;
         long double result;
         void parse();
+        void resolve();
     public:
-        Expression(istream &is) { getline(is, expression); parse(); }
-        Expression(const string &s) : expression(s) { parse(); }
-        long double resolve();
+        Expression(istream &is) { getline(is, expression); parse(); resolve(); }
+        Expression(const string &s) : expression(s) { parse(); resolve(); }
+        long double get_result() { return result; }
         void print_terms();
 };
 
 void Expression::parse()
 {
-    string::size_type pos = 0, old_pos = 0;
-    while ((pos = expression.find_first_of("*/+-")) != string::npos) {
-        terms.push_back(expression.substr(0, pos)); // pos should be > 0 or error
-        terms.push_back(expression.substr(pos, 1));
-        expression = expression.substr(pos + 1);
-        old_pos = pos;
+    string expression_copy = expression;
+    string::size_type pos;
+    while ((pos = expression_copy.find_first_of("*/+-")) != string::npos) {
+        terms.push_back(expression_copy.substr(0, pos));
+        terms.push_back(expression_copy.substr(pos, 1));
+        expression_copy = expression_copy.substr(pos + 1);
     }
-    terms.push_back(expression);
+    terms.push_back(expression_copy);
 }
 
-long double Expression::resolve()
+void Expression::resolve()
 {
-    string left_operand, right_operand;
-    auto it = terms.cbegin();
-    while (it != terms.cend()) {
-        if (*it == "*") {
-            auto b = it;
-            right_operand = *(++it);
-            auto e = ++it;
-            left_operand = to_string(stold(left_operand) * stold(right_operand));
-            it = terms.erase(--b, e);
-            terms.insert(it, left_operand);
-        }
-        else if (*it == "/") {
-            auto b = it;
-            right_operand = *(++it);
-            auto e = ++it;
-            left_operand = to_string(stold(left_operand) / stold(right_operand));
-            it = terms.erase(--b, e);
-            terms.insert(it, left_operand);
-        }
-        else {
-            left_operand = *it;
-            ++it;
-        }
-    }
-
-    print_terms();
-    cout << endl;
-
-    for (auto it = terms.cbegin(); it != terms.cend(); ++it) {
-        if (*it == "+") {
-            right_operand = *(++it);
-            left_operand = to_string(stold(left_operand) + stold(right_operand));
-        }
-        else if (*it == "-") {
-            right_operand = *(++it);
-            left_operand = to_string(stold(left_operand) + stold(right_operand));
-        }
-        else {
-            left_operand = *it;
+    {
+        auto it = terms.begin();
+        decltype(it) left_operand_it, right_operand_it;
+        while (it != terms.end()) {
+            if (*it == "*") {
+                right_operand_it = ++it;
+                size_t index;
+                long double right_operand = stold(*right_operand_it, &index);
+                if (!isnumber((*right_operand_it)[index]) && !isspace((*right_operand_it)[index]))
+                    throw invalid_argument("Invalid operand: " + *right_operand_it);
+                long double left_operand = stold(*left_operand_it, &index);
+                if (!isnumber((*left_operand_it)[index]) && !isspace((*left_operand_it)[index]))
+                    throw invalid_argument("Invalid operand: " + *left_operand_it);
+                *left_operand_it = to_string(left_operand * right_operand);
+                it = terms.erase(++left_operand_it, ++right_operand_it);
+            }
+            else if (*it == "/") {
+                right_operand_it = ++it;
+                size_t index;
+                long double right_operand = stold(*right_operand_it, &index);
+                if (!isspace((*right_operand_it)[index]))
+                    throw invalid_argument("Invalid operand: " + *right_operand_it);
+                long double left_operand = stold(*left_operand_it, &index);
+                if (!isspace((*left_operand_it)[index]))
+                    throw invalid_argument("Invalid operand: " + *left_operand_it);
+                *left_operand_it = to_string(left_operand / right_operand);
+                it = terms.erase(++left_operand_it, ++right_operand_it);
+            }
+            else {
+                left_operand_it = it;
+                ++it;
+            }
         }
     }
 
-    result = stold(left_operand);
+    {
+        auto it = terms.begin();
+        decltype(it) left_operand, right_operand;
+        while (it != terms.end()) {
+            if (*it == "+") {
+                right_operand = ++it;
+                *left_operand = to_string(stold(*left_operand) + stold(*right_operand));
+                it = terms.erase(++left_operand, ++right_operand);
+            }
+            else if (*it == "-") {
+                right_operand = ++it;
+                *left_operand = to_string(stold(*left_operand) / stold(*right_operand));
+                it = terms.erase(++left_operand, ++right_operand);
+            }
+            else {
+                left_operand = it;
+                ++it;
+            }
+        }
+    }
 
-    return result;
+    result = stold(terms.front());
 }
 
 void Expression::print_terms()
@@ -102,7 +105,7 @@ int main()
     Expression expression(cin);
     expression.print_terms();
     cout << endl;
-    cout << expression.resolve() << endl;
+    cout << expression.get_result() << endl;
 
     return 0;
 }
