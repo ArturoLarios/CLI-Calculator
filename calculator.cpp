@@ -4,7 +4,9 @@
 #include <cctype>
 #include <stdexcept>
 
-using std::istream, std::cin, std::cout, std::endl, std::string, std::to_string, std::list, std::invalid_argument;
+using std::istream, std::cin, std::cerr, std::cout, std::endl;
+using std::string, std::to_string, std::list;
+using std::invalid_argument, std::out_of_range;
 
 class Expression {
     private:
@@ -13,6 +15,9 @@ class Expression {
         long double result;
         void parse();
         void resolve();
+        list<string>::iterator process_operator(list<string>::iterator left_operand_term, 
+                                                list<string>::iterator operator_symbol_term);
+        long double convert_operand(list<string>::iterator term);
     public:
         Expression(istream &is) { getline(is, expression); parse(); resolve(); }
         Expression(const string &s) : expression(s) { parse(); resolve(); }
@@ -35,74 +40,79 @@ void Expression::parse()
 void Expression::resolve()
 {
     {
-        auto it = terms.begin();
-        decltype(it) left_operand_it;
-        while (it != terms.end()) {
-            if (*it == "*") {
-                size_t index;
-                char conversion_end;
-
-                long double left_operand = stold(*left_operand_it, &index);
-                conversion_end = (*left_operand_it)[index];
-                if (!isdigit(conversion_end) && conversion_end != '\0')
-                    throw invalid_argument("Invalid operand: " + *left_operand_it);
-
-                auto right_operand_it = ++it;
-                long double right_operand = stold(*right_operand_it, &index);
-                conversion_end = (*right_operand_it)[index];
-                if (!isdigit(conversion_end) && conversion_end != '\0')
-                    throw invalid_argument("Invalid operand: " + *right_operand_it);
-
-                *left_operand_it = to_string(left_operand * right_operand);
-                it = terms.erase(++left_operand_it, ++right_operand_it);
-            }
-            else if (*it == "/") {
-                size_t index;
-                char conversion_end;
-
-                long double left_operand = stold(*left_operand_it, &index);
-                conversion_end = (*left_operand_it)[index];
-                if (!isdigit(conversion_end) && conversion_end != '\0')
-                    throw invalid_argument("Invalid operand: " + *left_operand_it);
-
-                auto right_operand_it = ++it;
-                long double right_operand = stold(*right_operand_it, &index);
-                conversion_end = (*right_operand_it)[index];
-                if (!isdigit(conversion_end) && conversion_end != '\0')
-                    throw invalid_argument("Invalid operand: " + *right_operand_it);
-
-                *left_operand_it = to_string(left_operand / right_operand);
-                it = terms.erase(++left_operand_it, ++right_operand_it);
+        list<string>::iterator term = terms.begin();
+        list<string>::iterator left_operand_term;
+        while (term != terms.end()) {
+            if (*term == "*" || *term == "/") {
+                term = process_operator(left_operand_term, term);
             }
             else {
-                left_operand_it = it;
-                ++it;
+                left_operand_term = term;
+                ++term;
             }
         }
     }
 
     {
-        auto it = terms.begin();
-        decltype(it) left_operand, right_operand;
-        while (it != terms.end()) {
-            if (*it == "+") {
-                right_operand = ++it;
-                *left_operand = to_string(stold(*left_operand) + stold(*right_operand));
-                it = terms.erase(++left_operand, ++right_operand);
-            }
-            else if (*it == "-") {
-                right_operand = ++it;
-                *left_operand = to_string(stold(*left_operand) / stold(*right_operand));
-                it = terms.erase(++left_operand, ++right_operand);
+        list<string>::iterator term = terms.begin();
+        list<string>::iterator left_operand_term;
+        while (term != terms.end()) {
+            if (*term == "+" || *term == "-") {
+                term = process_operator(left_operand_term, term);
             }
             else {
-                left_operand = it;
-                ++it;
+                left_operand_term = term;
+                ++term;
             }
         }
     }
 
     result = stold(terms.front());
+}
+
+list<string>::iterator Expression::process_operator(list<string>::iterator left_operand_term, 
+                                                    list<string>::iterator operator_symbol_term)
+{
+    list<string>::iterator operator_symbol = operator_symbol_term;
+
+    long double left_operand = convert_operand(left_operand_term);
+
+    list<string>::iterator right_operand_term = ++operator_symbol_term;
+    long double right_operand = convert_operand(right_operand_term);
+
+    if (*operator_symbol == "*")
+        *left_operand_term = to_string(left_operand * right_operand);
+    else if (*operator_symbol == "/")
+        *left_operand_term = to_string(left_operand / right_operand);
+    else if (*operator_symbol == "+")
+        *left_operand_term = to_string(left_operand + right_operand);
+    else if (*operator_symbol == "-")
+        *left_operand_term = to_string(left_operand - right_operand);
+
+    return terms.erase(++left_operand_term, ++right_operand_term);
+}
+
+long double Expression::convert_operand(list<string>::iterator term)
+{
+    long double operand;
+    size_t index;
+    char conversion_end;
+    try {
+        if (*term == "")
+            throw invalid_argument("missing operand");
+        operand = stold(*term, &index);
+        conversion_end = (*term)[index];
+        if (!isspace(conversion_end) && conversion_end != '\0')
+            throw invalid_argument("invalid operand");
+    }
+    catch (const invalid_argument &e) {
+        throw invalid_argument("convert_operand: " 
+                                + (*term == "" ? e.what():e.what() + string(": ") + *term));
+    }
+    catch (const out_of_range &e) {
+        throw out_of_range("convert_operand: operand exceeds range of representable values: " + *term);
+    }
+    return operand;
 }
 
 void Expression::print_terms()
@@ -114,10 +124,20 @@ void Expression::print_terms()
 
 int main()
 {
-    Expression expression(cin);
-    expression.print_terms();
-    cout << endl;
-    cout << expression.get_result() << endl;
+    try {
+        Expression expression(cin);
+            expression.print_terms();
+        cout << endl;
+        cout << expression.get_result() << endl;
+    }
+    catch (const invalid_argument &e)
+    {
+        cerr << e.what() << endl;
+    }
+    catch (const out_of_range &e)
+    {
+        cerr << e.what() << endl;
+    }
 
     return 0;
 }
